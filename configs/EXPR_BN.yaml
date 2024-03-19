@@ -1,0 +1,35 @@
+## BASIC SETTINGS
+
+# AU, EXPR, VA
+task : EXPR
+num_classes : 8
+dir : abaw/expr/new_dataset_1_onlylinear3_BN_dropout
+device : cuda:0
+
+# dataset
+data_path : /media/minseongjae/HDD/data/AffWild2/Features
+anno_path : /media/minseongjae/HDD/data/AffWild2/6th ABAW Annotations
+window_size : 1
+stride : 1
+
+# data loader
+batch_size : 32
+num_workers : 4
+
+# model
+embedding_size : 768
+n_layers : 6
+n_head : 8
+# linear model
+batch_norm : True
+dropout : False
+
+# optimizer
+lr : 0.001
+optimizer : Adam
+use_scheduler : False
+step_size : 1000
+gamma : 0.99
+use_weight_decay : False
+decay_rate : 0.001
+epoch : 200

@@ -1,0 +1,43 @@
+## BASIC SETTINGS
+
+# AU, EXPR, VA
+task : AU
+num_classes : 12
+dir : abaw/au/vis_aud_transformer_seq
+device : cuda:0
+
+# dataset
+data_path : /home/minseongjae/ABAW/0_data
+anno_path : /media/minseongjae/HDD/data/AffWild2/6th ABAW Annotations
+seq_size : 100
+return_img : False
+return_aud : False
+return_seq : True
+return_vis : True
+augmentation : False
+p : 0.2
+# data loader
+batch_size : 268
+num_workers : 4
+
+# model
+model : transformer
+embedding_size : 768
+n_layers : 6
+n_head : 8
+# linear model
+batch_norm : True
+dropout : 0.2
+
+# loss
+loss : focal
+weighted : True
+# optimizer
+lr : 0.00005
+optimizer : AdamW
+use_scheduler : False
+step_size : 1000
+gamma : 0.99
+use_weight_decay : False
+decay_rate : 0.001
+epoch : 200
