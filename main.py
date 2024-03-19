@@ -2,9 +2,9 @@ from utils import get_config
 from transformer_model import TransformerModel, TransformerModel_decoder
 from model import linear_model, lstm_model, resnet_model, ImageFeatureTransformer, ImageTransformer
 # from dataset_yjs import MyDataset
-from dataset_msj import MyDataset
+from dataset import MyDataset
 from torch.utils.data import DataLoader
-from trainer_yjs import Trainer
+from trainer import Trainer
 import torch
 import torch.nn as nn
 import os

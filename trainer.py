@@ -10,6 +10,7 @@ from loss import CCCLoss, VALoss, ExprLoss  # Ensure correct import path
 from metrics import ExprMetric, VAMetric  # Ensure correct import path
 from torch.utils.tensorboard import SummaryWriter
 from transformers import ViTFeatureExtractor, ViTModel  # Ensure correct import path
+import pandas as pd
 class Trainer:
     def __init__(self, model, train_loader, val_loader, cfg, dir="abaw/", device='cuda'):
         self.model = model.to(device)
@@ -35,6 +36,8 @@ class Trainer:
     def _get_optimizer(self):
         if self.cfg['optimizer'] == "Adam":
             return optim.Adam(self.model.parameters(), lr=self.cfg['lr'], weight_decay=self.cfg['decay_rate'] if self.cfg['use_weight_decay'] else 0)
+        elif self.cfg['optimizer'] == "AdamW":
+            return optim.AdamW(self.model.parameters(), lr=self.cfg['lr'], weight_decay=self.cfg['decay_rate'] if self.cfg['use_weight_decay'] else 0)
         else:  # Default to SGD
             return optim.SGD(self.model.parameters(), lr=self.cfg['lr'], weight_decay=self.cfg['decay_rate'] if self.cfg['use_weight_decay'] else 0, momentum=0.9, nesterov=True)
 
@@ -110,6 +113,8 @@ class Trainer:
         pbar.set_postfix({'loss': avg_loss, 'metric': metric})
         return avg_loss, metric 
 
+    
+
     def validate_one_epoch(self):
         self.model.eval()
         total_loss = 0
@@ -149,6 +154,7 @@ class Trainer:
         total_loss = 0
         outs = []
         targets = []
+        data_paths = []
         pbar = tqdm(self.val_loader, desc=f'Epoch {self.current_epoch} Validation')
         with torch.no_grad():
             for batch_idx, data in enumerate(pbar):
@@ -162,10 +168,16 @@ class Trainer:
                     input = data['img'].to(self.device)
                 output = self.model(input)
                 outs.append(output.detach().cpu().numpy())
+                data_paths.append(data['Feature_path'])
                 # If you have other things to track per batch, do here
         avg_loss = total_loss / len(self.val_loader)
+        df = pd.DataFrame({'Feature_path': data_paths, 'Predicted': outs})
+        #print(outs)
         outs = np.concatenate(outs)
-        return outs
+        #print(outs)
+        df.to_csv('result.csv', index=False)
+        np.save('result.npy', outs)
+        return outs, data_paths
     
     def log_metrics(self, phase, loss, metrics, epoch):
         self.writer.add_scalar(f'Loss/{phase}', loss, epoch)
@@ -180,13 +192,17 @@ class Trainer:
     def train_epochs(self):
         best_val_metirc = 0
         counter = 0
-        patience = 10
+        patience = 3
         for epoch in range(self.epoch):
             self.current_epoch = epoch
             train_loss, train_metric = self.train_one_epoch()
             self.log_metrics('train', train_loss, train_metric, epoch)
             val_loss, val_metric = self.validate_one_epoch()
             self.log_metrics('validation', val_loss, val_metric, epoch)
+            print("Train results")
+            print(f"loss:{train_loss}, metric:{train_metric}")
+            print("Val results")
+            print(f"loss:{val_loss}, metric:{val_metric}")
             if self.scheduler:
                 self.scheduler.step()
             
@@ -207,5 +223,56 @@ class Trainer:
             if counter >= patience:
                 print(f"Early stopping triggered after {patience} epochs without improvement")
                 break  # Break out of the loop if early stopping condition is met
-
+            
         self.writer.close()
+    def train_decoder(self, learning_rate=0.001):
+        best_val_metirc = 0
+        counter = 0
+        patience = 3
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+        criterion = torch.nn.MSELoss()
+        # Example data loader (replace with actual data)
+
+        # Training loop
+
+        for epoch in range(self.epoch):
+            total_val_loss = 0
+            id  = 0
+            self.model.train()
+            for data in self.train_loader:
+                
+                src = data["vis_feat"].to(self.device)  # Source data
+                tgt = data["vis_feat"].to(self.device)  # Target data, in actual use, this could be shifted versions for forecasting
+                
+                # Forward pass
+                output = self.model(src, tgt)
+                
+                # Compute loss
+                loss = criterion(output, tgt)  # Measure how well we are predicting the future
+                
+                # Backward and optimize
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                
+            for data in self.val_loader:
+                src = data["vis_feat"].to(self.device)
+                tgt = data["vis_feat"].to(self.device)
+                output = self.model(src, tgt)
+                loss = criterion(output, tgt)
+                val_loss = loss.item()
+                total_val_loss += val_loss
+                id += 1
+            val_loss = total_val_loss / id
+            if val_loss > best_val_metirc:
+                best_val_metirc = val_loss
+                counter = 0  # Reset counter if validation loss improves
+                # Save best model if validation loss improves
+                self.save_model(val_loss, epoch)
+            else:
+                counter += 1  # Increment counter if validation loss does not improve
+            if counter >= patience:
+                print(f"Early stopping triggered after {patience} epochs without improvement")
+                break  # Break out of the loop if early stopping condition is met
+        print(f'Epoch [{epoch+1}/{self.epoch}], Loss: {loss.item():.4f}')
