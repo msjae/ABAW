@@ -18,7 +18,13 @@ class TransformerModel(nn.Module):
         self.positional_encoding = PositionalEncoding(self.embedding_size)
         self.encoder_layer = TransformerEncoderLayer(d_model=self.embedding_size, nhead=self.nhead, batch_first=True, dropout=0.5)
         self.transformer_encoder = TransformerEncoder(self.encoder_layer, num_layers=self.num_encoder_layers)
-        self.Linear = nn.Sequential(
+        if cfg['multi']:
+            self.Linear = nn.Sequential(
+            nn.Linear(self.embedding_size, self.num_classes))
+
+        
+        else:
+            self.Linear = nn.Sequential(
             nn.Linear(self.seq_len * self.embedding_size, 1024),
             nn.BatchNorm1d(1024),
             nn.Linear(1024, self.num_classes))
@@ -28,7 +34,10 @@ class TransformerModel(nn.Module):
         self.batch_size = x.shape[0]
         x = self.positional_encoding(x)
         x = self.transformer_encoder(x)
-        x = x.view(self.batch_size, -1)
+        if not self.cfg['multi']:
+            x = x.view(self.batch_size, -1)
+        # else:
+        #     x = torch.mean(x, dim=1)
         x = self.Linear(x)
         if self.cfg['task'] == "VA":
             x = torch.tanh(x)
@@ -36,6 +45,8 @@ class TransformerModel(nn.Module):
             x = torch.softmax(x, dim=1)
         else:
             x = torch.sigmoid(x)
+        
+        x = x.view(-1, self.seq_len, self.num_classes)
         return x
 
 class TransformerModel_decoder(nn.Module):

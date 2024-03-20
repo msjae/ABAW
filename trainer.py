@@ -9,7 +9,7 @@ from loss import FocalLoss  # Ensure correct import path
 from loss import CCCLoss, VALoss, ExprLoss  # Ensure correct import path
 from metrics import ExprMetric, VAMetric  # Ensure correct import path
 from torch.utils.tensorboard import SummaryWriter
-from transformers import ViTFeatureExtractor, ViTModel  # Ensure correct import path
+from transformers import ViTImageProcessor, ViTModel  # Ensure correct import path
 import pandas as pd
 class Trainer:
     def __init__(self, model, train_loader, val_loader, cfg, dir="abaw/", device='cuda'):
@@ -24,8 +24,22 @@ class Trainer:
         self.writer = SummaryWriter(os.path.join(dir, 'logs'))  # Add this line
         self.optimizer, self.criterion, self.scheduler = self._setting_hyperparameters()
         if self.cfg['return_img']:
-            self.feature_extractor = ViTFeatureExtractor.from_pretrained('google/vit-base-patch16-224-in21k')
-            
+            self.image_processor = ViTImageProcessor.from_pretrained('google/vit-base-patch16-224-in21k')
+            self.feat_extmodel = ViTModel.from_pretrained('google/vit-base-patch16-224-in21k').to(device)
+            self.feat_extmodel.eval()
+    def extract_time_series_features(self, image_seq):
+        # 특징을 저장할 리스트 초기화
+        batch_features = []
+        # 데이터 순회
+        with torch.no_grad():
+            for image in image_seq:
+                batch_images = image
+                inputs = self.image_processor(images=batch_images, return_tensors="pt", do_rescale=False, do_resize=False).to(self.device)
+                outputs = self.feat_extmodel(**inputs)
+                features = outputs.pooler_output
+                batch_features.append(features.to('cpu').numpy())  # 특징을 CPU로 이동 후 리스트에 추가
+        batch_features = np.array(batch_features)
+        return batch_features
 
     def _setting_hyperparameters(self):
         optimizer = self._get_optimizer()
@@ -92,13 +106,25 @@ class Trainer:
                 input = data['aud_feat'].to(self.device)
             elif self.cfg['return_img']:
                 input = data['img'].to(self.device)
-            if data['anno'].dim() == 3:
-                label = data['anno'][:,-1].to(self.device)
+                if self.cfg['model'] == "transformer":
+                    input = self.extract_time_series_features(input)
+                    input = torch.tensor(input).to(self.device)
+                    mask = torch.rand(input.size(1)) > 0.5  # 30개 프레임에 대한 마스크 생성
+                    # 마스킹될 프레임의 수를 기반으로 새 텐서 생성
+                    masked_tensor = torch.zeros(input.size(0), (~mask).sum(), input.size(2)).to(input.device)
+                    input[:, ~mask, :] = masked_tensor  # 마스킹된 위치에 새 텐서 할당
+            if not self.cfg['multi']:
+                if data['anno'].dim() == 3:
+                    label = data['anno'][:,-1].to(self.device)
+                else:
+                    label = data['anno'].to(self.device)
             else:
                 label = data['anno'].to(self.device)
+
+
             self.optimizer.zero_grad()
             output = self.model(input)
-            loss = self.criterion(output, label)
+            loss = self.criterion(output.view(-1, output.size(-1)), label.view(-1, label.size(-1)))
             loss.backward()
             self.optimizer.step()
             total_loss += loss.item()
@@ -114,40 +140,90 @@ class Trainer:
         return avg_loss, metric 
 
     
-
     def validate_one_epoch(self):
         self.model.eval()
         total_loss = 0
-        outs = []
-        targets = []
+        feature_outputs = {}
+        feature_targets = {}
         pbar = tqdm(self.val_loader, desc=f'Epoch {self.current_epoch} Validation')
+        
         with torch.no_grad():
             for batch_idx, data in enumerate(pbar):
-                if self.cfg['return_vis'] and self.cfg['return_aud']:
-                    input = torch.cat((data['vis_feat'], data['aud_feat']), dim=2).to(self.device)
-                elif self.cfg['return_vis']:
-                    input = data['vis_feat'].to(self.device)
-                elif self.cfg['return_aud']:
-                    input = data['aud_feat'].to(self.device)
-                elif self.cfg['return_img']:
-                    input = data['img'].to(self.device)
-                if data['anno'].dim() == 3:
-                    label = data['anno'][:,-1].to(self.device)
-                else:
-                    label = data['anno'].to(self.device)
+                # Input 데이터 준비
+                input, label = self.prepare_batch(data)
+                feature_path = data['Feature_path']
                 output = self.model(input)
                 loss = self.criterion(output, label)
+                
+                # 로스 업데이트
                 total_loss += loss.item()
-                outs.append(output.detach().cpu().numpy())
-                targets.append(label.detach().cpu().numpy())
+
+                # 결과 및 타겟 저장
+                for fp, out, tar in zip(feature_path, output.detach().cpu().numpy(), label.detach().cpu().numpy()):
+                    if fp not in feature_outputs:
+                        feature_outputs[fp] = []
+                        feature_targets[fp] = []
+                    feature_outputs[fp].append(out)
+                    feature_targets[fp].append(tar)
+
+                # 진행 상태 업데이트
                 pbar.set_postfix({'loss': total_loss / (batch_idx + 1)})
-                # If you have other things to track per batch, do here
+
+        # 중복 결과 합산 및 스무딩
+        outs = []
+        targets = []
+        for fp in feature_outputs:
+            outs.append(np.mean(feature_outputs[fp], axis=0))
+            targets.append(np.mean(feature_targets[fp], axis=0))
+
+        # 최종 손실 및 메트릭 계산
         avg_loss = total_loss / len(self.val_loader)
-        outs = np.concatenate(outs)
-        targets = np.concatenate(targets)
+        outs = np.array(outs)
+        targets = np.array(targets)
         metric = self.compute_metric(outs, targets)
+
         pbar.set_postfix({'loss': avg_loss, 'metric': metric})
         return avg_loss, metric
+    # def validate_one_epoch(self):
+    #     self.model.eval()
+    #     total_loss = 0
+    #     outs = []
+    #     targets = []
+    #     pbar = tqdm(self.val_loader, desc=f'Epoch {self.current_epoch} Validation')
+    #     with torch.no_grad():
+    #         for batch_idx, data in enumerate(pbar):
+    #             if self.cfg['return_vis'] and self.cfg['return_aud']:
+    #                 input = torch.cat((data['vis_feat'], data['aud_feat']), dim=2).to(self.device)
+    #             elif self.cfg['return_vis']:
+    #                 input = data['vis_feat'].to(self.device)
+    #             elif self.cfg['return_aud']:
+    #                 input = data['aud_feat'].to(self.device)
+    #             elif self.cfg['return_img']:
+    #                 input = data['img'].to(self.device)
+    #                 if self.cfg['model'] == "transformer":
+    #                     input = self.extract_time_series_features(input)
+    #                     input = torch.tensor(input).to(self.device)
+    #             if not self.cfg['multi']:
+    #                 if data['anno'].dim() == 3:
+    #                     label = data['anno'][:,-1].to(self.device)
+    #                 else:
+    #                     label = data['anno'].to(self.device)
+    #             else:
+    #                 label = data['anno'].to(self.device)
+    #             feature_path = data['Feature_path']
+    #             output = self.model(input)
+    #             loss = self.criterion(output, label)
+    #             total_loss += loss.item()
+    #             outs.append(output.detach().cpu().numpy())
+    #             targets.append(label.detach().cpu().numpy())
+    #             pbar.set_postfix({'loss': total_loss / (batch_idx + 1)})
+    #             # If you have other things to track per batch, do here
+    #     avg_loss = total_loss / len(self.val_loader)
+    #     outs = np.concatenate(outs)
+    #     targets = np.concatenate(targets)
+    #     metric = self.compute_metric(outs, targets)
+    #     pbar.set_postfix({'loss': avg_loss, 'metric': metric})
+    #     return avg_loss, metric
     
     def test(self):
         self.model.eval()

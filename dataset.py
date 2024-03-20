@@ -31,18 +31,17 @@ class MyDataset(Dataset):
         if return_aud:
             self.features_paths = [x for x in self.features_paths if os.path.exists(os.path.join(data_root, 'aud_feat', x))]
         if aug:
-            self.transform = A.Compose([
+            self.transform = A.ReplayCompose([
                 A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.3),
                 A.HorizontalFlip(p=0.5),
                 A.GaussianBlur(blur_limit=(3, 7), p=0.3),
                 A.Sharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=0.3),
                 A.Resize(224, 224),
-                A.Perspective(scale=(0.05, 0.1), p=0.5),
                 A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255.0, always_apply=True),
                 ToTensorV2()
             ])
         else:
-            self.transform = A.Compose([
+            self.transform = A.ReplayCompose([
                 A.Resize(224, 224),
                 A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255.0, always_apply=True),
                 ToTensorV2()
@@ -71,6 +70,7 @@ class MyDataset(Dataset):
 
             # Adjust for the sequence of feature paths
             feature_paths_seq = [self.features_paths[i] for i in idxs]
+            data['Feature_path'] = feature_paths_seq
             annotations_seq = np.array([self.annotations[i] for i in idxs])
             data['anno'] = torch.tensor(annotations_seq, dtype=torch.float)
             
@@ -85,7 +85,18 @@ class MyDataset(Dataset):
                 aud_feat_seq = np.concatenate([np.load(os.path.join(self.data_root, 'aud_feat', fp)) for fp in feature_paths_seq], axis=0)
                 data['aud_feat'] = torch.tensor(aud_feat_seq, dtype=torch.float)
             if self.return_img:
-                img_seq = [self.transform(image=cv2.cvtColor(cv2.imread(os.path.join(self.data_root, 'imgs', fp.replace('.npy','.jpg'))), cv2.COLOR_BGR2RGB))['image'] for fp in feature_paths_seq]
+                first_image_path = os.path.join(self.data_root, 'imgs', feature_paths_seq[0].replace('.npy', '.jpg'))
+                first_image = cv2.cvtColor(cv2.imread(first_image_path), cv2.COLOR_BGR2RGB)
+                augmented = self.transform(image=first_image)
+                img_seq = [augmented['image']]
+                for fp in feature_paths_seq[1:]:
+                    img_path = os.path.join(self.data_root, 'imgs', fp.replace('.npy','.jpg'))
+                    img = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+                    image_aug = A.ReplayCompose.replay(augmented['replay'], image=img)
+                    img_seq.append(image_aug['image'])
+                    
+                # img_seq = [self.transform(image=cv2.cvtColor(cv2.imread(os.path.join(self.data_root, 'imgs', fp.replace('.npy','.jpg'))), cv2.COLOR_BGR2RGB))['image'] for fp in feature_paths_seq]
+                
                 data['img'] = torch.stack(img_seq)
 
         else:

@@ -4,7 +4,7 @@
 task : EXPR
 num_classes : 8
 dir : abaw/expr/vis_aud_transformer_seq_masked
-device : cuda:1
+device : cuda:0
 
 # dataset
 data_path : /home/minseongjae/ABAW/0_data
@@ -15,7 +15,8 @@ return_aud : False
 return_seq : True
 return_vis : True
 augmentation : False
-
+p : 0.5
+multi: True
 # data loader
 batch_size : 512
 num_workers : 4
