@@ -49,5 +49,5 @@ def run_inference(image_root, save_root, device="cuda", mode="cls"):
 if __name__ == "__main__":
     IMAGE_ROOT = "data/raw/image"
     SAVE_ROOT = "data/features/image"
-    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
     run_inference(IMAGE_ROOT, SAVE_ROOT, DEVICE, mode="both")  # cls, mean, or both

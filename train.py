@@ -44,7 +44,7 @@ def main(config_path):
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = config["device"]
 
     # Dataset
     train_dataset = ImageFeatureDataset(

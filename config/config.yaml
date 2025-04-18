@@ -1,5 +1,6 @@
 model_type: transformer  # or "lstm"
 task: expr                # or "va", "au"
+device: cuda:1
 
 model:
   input_dim: 768
