@@ -95,15 +95,15 @@ class ImageFeatureDataset(Dataset):
             fpath = os.path.join(feature_dir, f"{i+1:05d}.npy")
             feature = np.load(fpath)
             feature_seq.append(torch.from_numpy(feature).float())
-            if self.task == "expr":
-                target_labels.append(torch.tensor(labels[i][0], dtype=torch.long))
-            elif self.task == "va":
-                target_labels.append(torch.tensor(labels[i][:2], dtype=torch.float32))
-            elif self.task == "au":
-                target_labels.append(torch.tensor(labels[i], dtype=torch.float32))
+            
+        if self.task == "expr":
+            label = torch.tensor(labels[-1][0], dtype=torch.long)
+        elif self.task == "va":
+            label = torch.tensor(labels[-1][:2], dtype=torch.float32)
+        elif self.task == "au":
+            label = torch.tensor(labels[-1], dtype=torch.float32)
 
         feature_seq = torch.cat(feature_seq, dim=0)  # [seq_len, 768]
-        label = torch.stack(target_labels)
 
         return feature_seq, label
 
