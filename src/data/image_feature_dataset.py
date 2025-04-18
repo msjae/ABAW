@@ -96,7 +96,7 @@ class ImageFeatureDataset(Dataset):
             feature = np.load(fpath)
             feature_seq.append(torch.from_numpy(feature).float())
             if self.task == "expr":
-                target_labels.append(int(labels[i][0]))
+                target_labels.append(torch.tensor(labels[i][0], dtype=torch.long))
             elif self.task == "va":
                 target_labels.append(torch.tensor(labels[i][:2], dtype=torch.float32))
             elif self.task == "au":
@@ -111,25 +111,25 @@ if __name__ == "__main__":
     from torch.utils.data import DataLoader
 
     # feature_root = "data/features/image_mean"
-    feature_root = "data/features/features_mean"
     label_root = 'data/labels'
-    task = "au" # expr, va and au
-    split = "train" # train and val
-
-    dataset = ImageFeatureDataset(
-        feature_root=feature_root,
-        label_root=label_root,
-        task=task,
-        split=split,
-        seq_len=30,
-        stride=1
-    )
-
-    dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
-
-    print(f"[INFO] Number of samples: {len(dataset)}")
-
-    for features, labels in dataloader:
-        print(f"[INFO] Feature batch shape: {features.shape}")
-        print(f"[INFO] Label batch shape: {labels.shape}")
-        break
+    split = "val"  # train or val
+    feature_root = "data/features/features_mean"
+    
+    for task in ["expr", "va", "au"]:
+        print(f"\n[INFO] Loading task: {task}")
+        dataset = ImageFeatureDataset(
+            feature_root=feature_root,
+            label_root=label_root,
+            task=task,
+            split=split,
+            seq_len=30,
+            stride=1
+        )
+        dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
+    
+        print(f"[INFO] Number of samples for task '{task}': {len(dataset)}")
+    
+        for features, labels in dataloader:
+            print(f"[INFO] Task '{task}' Feature batch shape: {features.shape}")
+            print(f"[INFO] Task '{task}' Label batch shape: {labels.shape}")
+            break
