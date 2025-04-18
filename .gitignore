@@ -1,2 +1,5 @@
-/0_data
-/abaw
+__pycache__/
+*.py[cod]
+
+/data/
+/wandb/

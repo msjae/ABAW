@@ -1,7 +1,0 @@
-scipy==1.11.1
-torch
-torchvision
-torchaudio
-albumentations
-pandas
-tensorboard
