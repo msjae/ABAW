@@ -39,16 +39,18 @@ class ImageFeatureDataset(Dataset):
 
             if not os.path.isdir(feature_dir) or not os.path.exists(label_path):
                 continue
+
+            feature_files = sorted([
+                f for f in os.listdir(feature_dir) if f.endswith(".npy")
+            ])
+            available_frames = set(int(f.split('_')[-1].split('.')[0]) for f in feature_files)
+
             with open(label_path, "r") as f:
                 header = f.readline()
                 lines = f.readlines()
 
             delimiter = ',' if self.task in ("va", "au") else None
             labels = [list(map(float, line.strip().split(delimiter))) for line in lines]
-            feature_files = sorted([
-                f for f in os.listdir(feature_dir) if f.endswith(".npy")
-            ])
-            available_frames = set(int(f.split('_')[-1].split('.')[0]) for f in feature_files)
 
             for start in range(0, len(labels) - self.seq_len + 1, self.stride):
                 valid = True
@@ -61,7 +63,14 @@ class ImageFeatureDataset(Dataset):
                         valid = False
                         break
                 if valid:
-                    self.samples.append((video, start))
+                    paths = [os.path.join(feature_dir, f"{start + offset + 1:05d}.npy") for offset in range(self.seq_len)]
+                    if self.task == "expr":
+                        label = torch.tensor(labels[start + self.seq_len - 1][0], dtype=torch.long)
+                    elif self.task == "va":
+                        label = torch.tensor(labels[start + self.seq_len - 1][:2], dtype=torch.float32)
+                    elif self.task == "au":
+                        label = torch.tensor(labels[start + self.seq_len - 1], dtype=torch.float32)
+                    self.samples.append((paths, label))
 
     def _is_invalid(self, label):
         if self.task == "expr":
@@ -76,35 +85,9 @@ class ImageFeatureDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        video, start = self.samples[idx]
-        feature_dir = os.path.join(self.feature_root, video)
-        label_path = os.path.join(self.label_root, f"{video}.txt")
-
-        with open(label_path, "r") as f:
-            f.readline()  # skip header
-            lines = f.readlines()
-
-        delimiter = ',' if self.task in ("va", "au") else None
-        labels = [list(map(float, line.strip().split(delimiter))) for line in lines]
-
-        feature_seq = []
-        target_labels = []
-
-        for offset in range(self.seq_len):
-            i = start + offset
-            fpath = os.path.join(feature_dir, f"{i+1:05d}.npy")
-            feature = np.load(fpath)
-            feature_seq.append(torch.from_numpy(feature).float())
-            
-        if self.task == "expr":
-            label = torch.tensor(labels[-1][0], dtype=torch.long)
-        elif self.task == "va":
-            label = torch.tensor(labels[-1][:2], dtype=torch.float32)
-        elif self.task == "au":
-            label = torch.tensor(labels[-1], dtype=torch.float32)
-
+        paths, label = self.samples[idx]
+        feature_seq = [torch.from_numpy(np.load(p)).float() for p in paths]
         feature_seq = torch.cat(feature_seq, dim=0)  # [seq_len, 768]
-
         return feature_seq, label
 
 if __name__ == "__main__":
