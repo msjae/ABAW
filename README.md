@@ -6,7 +6,7 @@ This repository contains the official implementation of the following paper:
 
 This project provides training code for a temporal emotion recognition model based on ViT and Transformer, developed for the [ABAW Challenge](https://ibug.doc.ic.ac.uk/resources/abaw/) across EXPR, VA, and AU tasks.
 
-📄 [한국어 문서 보기 (View in Korean)](Readme_ko.md)
+📄 [한국어 문서 보기 (View in Korean)](README_ko.md)
 
 ---
 

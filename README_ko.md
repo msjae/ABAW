@@ -6,7 +6,7 @@
 
 이 프로젝트는 [ABAW Challenge](https://ibug.doc.ic.ac.uk/resources/abaw/)의 EXPR, VA, AU 태스크를 기반으로, ViT와 Transformer를 사용한 시계열 감정 인식 모델 학습 코드입니다.
 
-📄 [View in English](Readme.md)
+📄 [View in English](README.md)
 
 ---
 
