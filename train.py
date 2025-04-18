@@ -6,6 +6,7 @@ import wandb
 import yaml
 import argparse
 from tqdm import tqdm
+from src.losses.loss import get_loss
 
 from src.data.image_feature_dataset import ImageFeatureDataset
 from src.models.lstm_emotion import LSTMEmotionModel
@@ -86,12 +87,7 @@ def main(config_path):
     model.to(device)
 
     # Loss
-    if config["task"] == "expr":
-        criterion = nn.CrossEntropyLoss()
-    elif config["task"] == "va":
-        criterion = nn.MSELoss()
-    elif config["task"] == "au":
-        criterion = nn.BCEWithLogitsLoss()
+    criterion = get_loss(task=config["task"], device=device)
 
     optimizer = optim.Adam(model.parameters(), lr=config["train"]["lr"])
 
