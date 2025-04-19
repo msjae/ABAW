@@ -4,7 +4,7 @@ This repository contains the official implementation of the following paper:
 
 > S. Min, J. Yang and S. Lim, "Emotion Recognition Using Transformers with Random Masking," _2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)_, Seattle, WA, USA, 2024, pp. 4860-4865, doi: [10.1109/CVPRW63382.2024.00489](https://ieeexplore.ieee.org/document/10678303).
 
-This project provides training code for a temporal emotion recognition model based on ViT and Transformer, developed for the [ABAW Challenge](https://ibug.doc.ic.ac.uk/resources/abaw/) across EXPR, VA, and AU tasks.
+This project provides training code for a temporal emotion recognition model based on ViT and Transformer, developed for the [ABAW Challenge](https://affective-behavior-analysis-in-the-wild.github.io/6th/) across EXPR, VA, and AU tasks.
 
 📄 [한국어 문서 보기 (View in Korean)](README_ko.md)
 
@@ -45,7 +45,26 @@ data/
 
 ---
 
-## 🚀 How to Train
+## Conda Environment Setup (based on `environment.yml`)
+
+```bash
+conda env create -f environment.yml
+conda activate abaw
+```
+
+---
+
+## pip Environment Setup (based on `requirements.txt`)
+
+```bash
+python -m venv abaw-env
+source abaw-env/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
+## How to Train
 
 ```bash
 python train.py --config config/config.yaml

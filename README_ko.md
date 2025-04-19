@@ -4,7 +4,7 @@
 
 > S. Min, J. Yang and S. Lim, "Emotion Recognition Using Transformers with Random Masking," _2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)_, Seattle, WA, USA, 2024, pp. 4860-4865, doi: [10.1109/CVPRW63382.2024.00489](https://ieeexplore.ieee.org/document/10678303).
 
-이 프로젝트는 [ABAW Challenge](https://ibug.doc.ic.ac.uk/resources/abaw/)의 EXPR, VA, AU 태스크를 기반으로, ViT와 Transformer를 사용한 시계열 감정 인식 모델 학습 코드입니다.
+이 프로젝트는 [6th ABAW Challenge](https://affective-behavior-analysis-in-the-wild.github.io/6th/)의 EXPR, VA, AU 태스크를 기반으로, ViT와 Transformer를 사용한 시계열 감정 인식 모델 학습 코드입니다.
 
 📄 [View in English](README.md)
 
@@ -45,7 +45,26 @@ data/
 
 ---
 
-## 🚀 학습 실행
+## Conda 환경 구성 (`environment.yml` 기반)
+
+```bash
+conda env create -f environment.yml
+conda activate abaw
+```
+
+---
+
+## pip 환경 구성 (`requirements.txt` 기반)
+
+```bash
+python -m venv abaw-env
+source abaw-env/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
+## 학습 실행
 
 ```bash
 python train.py --config config/config.yaml
