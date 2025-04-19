@@ -13,9 +13,10 @@ model:
 train:
   batch_size: 32
   lr: 0.0001
-  epochs: 10
+  epochs: 5
+  max_iter: 10
 
 data:
-  feature_root: data/features/features_mean
+  feature_root: data/features/image/mean
   label_root: data/labels
-  seq_len: 30
+  seq_len: 50

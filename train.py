@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -6,16 +7,19 @@ import wandb
 import yaml
 import argparse
 from tqdm import tqdm
-from src.losses.loss import get_loss
 
 from src.data.image_feature_dataset import ImageFeatureDataset
 from src.models.lstm_emotion import LSTMEmotionModel
 from src.models.transformer_emotion import TransformerEmotionModel
+from src.loss import get_loss
+from src.metrics import ExprMetric, VAMetric, AUMetric
 
-def train_one_epoch(model, dataloader, criterion, optimizer, device):
+def train_one_epoch(model, dataloader, criterion, optimizer, device, max_iter=None):
     model.train()
     running_loss = 0.0
-    for features, labels in tqdm(dataloader, desc="Training"):
+    for i, (features, labels) in enumerate(tqdm(dataloader, desc="Training")):
+        if max_iter and i >= max_iter:
+            break
         features, labels = features.to(device), labels.to(device)
 
         outputs = model(features)
@@ -28,16 +32,44 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device):
         running_loss += loss.item() * features.size(0)
     return running_loss / len(dataloader.dataset)
 
-def validate(model, dataloader, criterion, device):
+def validate(model, dataloader, criterion, device, task, max_iter=None):
     model.eval()
     running_loss = 0.0
+    all_preds, all_labels = [], []
+
     with torch.no_grad():
-        for features, labels in tqdm(dataloader, desc="Validation"):
+        for i, (features, labels) in enumerate(tqdm(dataloader, desc="Validation")):
+            if max_iter and i >= max_iter:
+                break
             features, labels = features.to(device), labels.to(device)
             outputs = model(features)
             loss = criterion(outputs, labels)
             running_loss += loss.item() * features.size(0)
-    return running_loss / len(dataloader.dataset)
+
+            if task == "expr":
+                preds = torch.softmax(outputs, dim=1).cpu().numpy()
+                labels = labels.cpu().numpy()
+                all_preds.extend(preds)
+                all_labels.extend(labels)
+            elif task == "va":
+                all_preds.extend(outputs.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+            elif task == "au":
+                all_preds.extend(torch.sigmoid(outputs).cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+
+    avg_loss = running_loss / len(dataloader.dataset)
+
+    if task == "expr":
+        metric = ExprMetric()(np.array(all_preds), np.array(all_labels))
+    elif task == "va":
+        metric = VAMetric()(np.array(all_preds), np.array(all_labels))
+    elif task == "au":
+        metric = AUMetric()(np.array(all_preds), np.array(all_labels))
+    else:
+        metric = {}
+
+    return avg_loss, metric
 
 def main(config_path):
     # Load config
@@ -45,6 +77,7 @@ def main(config_path):
         config = yaml.safe_load(f)
 
     device = config["device"]
+    max_iter = config.get("train", {}).get("max_iter", None)
 
     # Dataset
     train_dataset = ImageFeatureDataset(
@@ -92,17 +125,18 @@ def main(config_path):
     optimizer = optim.Adam(model.parameters(), lr=config["train"]["lr"])
 
     # wandb init
-    wandb.init(project="ABAW", config=config)
+    wandb.init(project="ABAW", name=f"{config['task']}_run", config=config)
     wandb.watch(model)
 
     for epoch in range(config["train"]["epochs"]):
-        train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss = validate(model, val_loader, criterion, device)
+        train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device, max_iter)
+        val_loss, val_metric = validate(model, val_loader, criterion, device, config["task"], max_iter)
 
         wandb.log({
             "epoch": epoch + 1,
             "train_loss": train_loss,
-            "val_loss": val_loss
+            "val_loss": val_loss,
+            **val_metric
         })
 
         print(f"Epoch [{epoch+1}/{config['train']['epochs']}], Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
